@@ -56,47 +56,55 @@ namespace TrailerGet
                     // Load the movie's NFO file
                     XDocument doc = XDocument.Load(nfoName);
 
-                    // Get the tmdbid
-                    string tmdbid = doc.Root.Element("tmdbid").Value;
-
-                    Console.WriteLine($"Got TMDB ID {tmdbid}");
-
-                    String tmdburl = $"https://api.themoviedb.org/3/movie/{tmdbid}/videos?language=en-US";
-
-                    try
+                    if (doc.Root.Element("tmdbid") is not null)
                     {
-                        // Fetch and deserialize JSON
-                        Response response = await client.GetFromJsonAsync<Response>(tmdburl);
-                        foreach (Video video in response.results)
+                        // Get the tmdbid
+                        string tmdbid = doc.Root.Element("tmdbid").Value;
+
+                        Console.WriteLine($"Got TMDB ID {tmdbid}");
+
+                        String tmdburl = $"https://api.themoviedb.org/3/movie/{tmdbid}/videos?language=en-US";
+
+                        try
                         {
-                            if (video.type == "Trailer" && video.site == "YouTube" && video.official && video.size >= 720)
+                            // Fetch and deserialize JSON
+                            Response response = await client.GetFromJsonAsync<Response>(tmdburl);
+                            foreach (Video video in response.results)
                             {
-                                Console.WriteLine($"Attempting download of video {video.name} with key {video.key}");
-
-                                String ytURL = $"https://www.youtube.com/watch?v={video.key}";
-                                String movieName = Path.GetFileName(moviePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-                                String trailerPath = $"{trailerdir}\\{movieName}\\trailers";
-                                Directory.CreateDirectory(trailerPath);
-
-                                String baseName = $"{trailerPath}\\trailer1";
-                                String trailerName = $"{baseName}.%(ext)s";
-                                if (!File.Exists($"{baseName}.webm") && !File.Exists($"{baseName}.mkv") && !File.Exists($"{baseName}.mp4")) {
-                                    Process.Start("yt-dlp.exe", $"--remote-components ejs:github --cookies {cookiesfile} -o \"{trailerName}\" {ytURL}").WaitForExit();
-                                    await Task.Delay(1000);
-                                } else
+                                if (video.type == "Trailer" && video.site == "YouTube" && video.official && video.size >= 720)
                                 {
-                                    Console.WriteLine($"Skipping download for existing trailer {trailerName}");
+                                    Console.WriteLine($"Attempting download of video {video.name} with key {video.key}");
+
+                                    String ytURL = $"https://www.youtube.com/watch?v={video.key}";
+                                    String movieName = Path.GetFileName(moviePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+                                    String trailerPath = $"{trailerdir}\\{movieName}\\trailers";
+                                    Directory.CreateDirectory(trailerPath);
+
+                                    String baseName = $"{trailerPath}\\trailer1";
+                                    String trailerName = $"{baseName}.%(ext)s";
+                                    if (!File.Exists($"{baseName}.webm") && !File.Exists($"{baseName}.mkv") && !File.Exists($"{baseName}.mp4"))
+                                    {
+                                        Process.Start("yt-dlp.exe", $"--remote-components ejs:github --cookies {cookiesfile} -o \"{trailerName}\" {ytURL}").WaitForExit();
+                                        await Task.Delay(1000);
+                                    }
+                                    else
+                                    {
+                                        Console.WriteLine($"Skipping download for existing trailer {trailerName}");
+                                    }
+                                }
+                                else
+                                {
+                                    Console.WriteLine($"Skipping download of video {video.name} with type {video.type}, site {video.site}, size {video.size}, official={video.official}");
                                 }
                             }
-                            else
-                            {
-                                Console.WriteLine($"Skipping download of video {video.name} with type {video.type}, site {video.site}, size {video.size}, official={video.official}");
-                            }
                         }
-                    }
-                    catch (HttpRequestException e)
+                        catch (HttpRequestException e)
+                        {
+                            Console.WriteLine($"TMDB request error: {e.Message}");
+                        }
+                    } else
                     {
-                        Console.WriteLine($"TMDB request error: {e.Message}");
+                        Console.WriteLine($"{moviePath} has no tmdbid, skipping");
                     }
 
                     await Task.Delay(100);
