@@ -69,33 +69,44 @@ namespace TrailerGet
                         {
                             // Fetch and deserialize JSON
                             Response response = await client.GetFromJsonAsync<Response>(tmdburl);
+
+                            Video dlVideo = null;
+
                             foreach (Video video in response.results)
                             {
-                                if (video.type == "Trailer" && video.site == "YouTube" && video.official && video.size >= 720)
+                                if ((video.official || dlVideo is null) && video.type == "Trailer" && video.site == "YouTube" && video.size >= 720)
                                 {
-                                    Console.WriteLine($"Attempting download of video {video.name} with key {video.key}");
-
-                                    String ytURL = $"https://www.youtube.com/watch?v={video.key}";
-                                    String movieName = Path.GetFileName(moviePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-                                    String trailerPath = $"{trailerdir}\\{movieName}\\trailers";
-                                    Directory.CreateDirectory(trailerPath);
-
-                                    String baseName = $"{trailerPath}\\trailer1";
-                                    String trailerName = $"{baseName}.%(ext)s";
-                                    if (!File.Exists($"{baseName}.webm") && !File.Exists($"{baseName}.mkv") && !File.Exists($"{baseName}.mp4"))
-                                    {
-                                        Process.Start("yt-dlp.exe", $"--remote-components ejs:github --cookies {cookiesfile} -o \"{trailerName}\" {ytURL}").WaitForExit();
-                                        await Task.Delay(1000);
-                                    }
-                                    else
-                                    {
-                                        Console.WriteLine($"Skipping download for existing trailer {trailerName}");
-                                    }
+                                    dlVideo = video;
                                 }
                                 else
                                 {
-                                    Console.WriteLine($"Skipping download of video {video.name} with type {video.type}, site {video.site}, size {video.size}, official={video.official}");
+                                    //Console.WriteLine($"Skipping download of video {video.name} with type {video.type}, site {video.site}, size {video.size}, official={video.official}");
                                 }
+                            }
+
+                            if (dlVideo is not null)
+                            {
+                                String ytURL = $"https://www.youtube.com/watch?v={dlVideo.key}";
+                                String movieName = Path.GetFileName(moviePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+                                String trailerPath = $"{trailerdir}\\{movieName}\\trailers";
+                                Directory.CreateDirectory(trailerPath);
+
+                                String baseName = $"{trailerPath}\\trailer1";
+                                String trailerName = $"{baseName}.%(ext)s";
+                                if (!File.Exists($"{baseName}.webm") && !File.Exists($"{baseName}.mkv") && !File.Exists($"{baseName}.mp4"))
+                                {
+                                    Console.WriteLine($"Attempting download of video {dlVideo.name} with type {dlVideo.type}, site {dlVideo.site}, size {dlVideo.size}, official={dlVideo.official} with key {dlVideo.key}");
+
+                                    Process.Start("yt-dlp.exe", $"--remote-components ejs:github --cookies {cookiesfile} -o \"{trailerName}\" {ytURL}").WaitForExit();
+                                    await Task.Delay(1000);
+                                }
+                                else
+                                {
+                                    Console.WriteLine($"Skipping download for existing trailer {baseName}");
+                                }
+                            } else
+                            {
+                                Console.WriteLine($"No trailers found for {moviePath}");
                             }
                         }
                         catch (HttpRequestException e)
