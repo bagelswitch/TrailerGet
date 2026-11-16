@@ -48,77 +48,82 @@ namespace TrailerGet
 
             foreach (string moviePath in moviePaths)
             {
-                Console.WriteLine($"\n\nFetching trailers for {moviePath}");
-
                 String nfoName = $"{moviePath}\\movie.nfo";
-                if (File.Exists(nfoName))
+
+                String movieName = Path.GetFileName(moviePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+                String trailerPath = $"{trailerdir}\\{movieName}\\trailers";
+                Directory.CreateDirectory(trailerPath);
+
+                String baseName = $"{trailerPath}\\trailer1";
+                String trailerName = $"{baseName}.%(ext)s";
+
+                if (!File.Exists($"{baseName}.webm") && !File.Exists($"{baseName}.mkv") && !File.Exists($"{baseName}.mp4"))
                 {
-                    // Load the movie's NFO file
-                    XDocument doc = XDocument.Load(nfoName);
+                    Console.WriteLine($"\n\nFetching trailers for {moviePath}");
 
-                    if (doc.Root.Element("tmdbid") is not null)
+                    if (File.Exists(nfoName))
                     {
-                        // Get the tmdbid
-                        string tmdbid = doc.Root.Element("tmdbid").Value;
+                        // Load the movie's NFO file
+                        XDocument doc = XDocument.Load(nfoName);
 
-                        Console.WriteLine($"Got TMDB ID {tmdbid}");
-
-                        String tmdburl = $"https://api.themoviedb.org/3/movie/{tmdbid}/videos?language=en-US";
-
-                        try
+                        if (doc.Root.Element("tmdbid") is not null)
                         {
-                            // Fetch and deserialize JSON
-                            Response response = await client.GetFromJsonAsync<Response>(tmdburl);
+                            // Get the tmdbid
+                            string tmdbid = doc.Root.Element("tmdbid").Value;
 
-                            Video dlVideo = null;
+                            Console.WriteLine($"Got TMDB ID {tmdbid}");
 
-                            foreach (Video video in response.results)
+                            String tmdburl = $"https://api.themoviedb.org/3/movie/{tmdbid}/videos?language=en-US";
+
+                            try
                             {
-                                if ((video.official || dlVideo is null) && video.type == "Trailer" && video.site == "YouTube" && video.size >= 720)
-                                {
-                                    dlVideo = video;
-                                }
-                                else
-                                {
-                                    //Console.WriteLine($"Skipping download of video {video.name} with type {video.type}, site {video.site}, size {video.size}, official={video.official}");
-                                }
-                            }
+                                // Fetch and deserialize JSON
+                                Response response = await client.GetFromJsonAsync<Response>(tmdburl);
 
-                            if (dlVideo is not null)
-                            {
-                                String ytURL = $"https://www.youtube.com/watch?v={dlVideo.key}";
-                                String movieName = Path.GetFileName(moviePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-                                String trailerPath = $"{trailerdir}\\{movieName}\\trailers";
-                                Directory.CreateDirectory(trailerPath);
+                                Video dlVideo = null;
 
-                                String baseName = $"{trailerPath}\\trailer1";
-                                String trailerName = $"{baseName}.%(ext)s";
-                                if (!File.Exists($"{baseName}.webm") && !File.Exists($"{baseName}.mkv") && !File.Exists($"{baseName}.mp4"))
+                                foreach (Video video in response.results)
                                 {
+                                    if ((video.official || dlVideo is null) && video.type == "Trailer" && video.site == "YouTube" && video.size >= 720)
+                                    {
+                                        dlVideo = video;
+                                    }
+                                    else
+                                    {
+                                        //Console.WriteLine($"Skipping download of video {video.name} with type {video.type}, site {video.site}, size {video.size}, official={video.official}");
+                                    }
+                                }
+
+                                if (dlVideo is not null)
+                                {
+                                    String ytURL = $"https://www.youtube.com/watch?v={dlVideo.key}";
+
                                     Console.WriteLine($"Attempting download of video {dlVideo.name} with type {dlVideo.type}, site {dlVideo.site}, size {dlVideo.size}, official={dlVideo.official} with key {dlVideo.key}");
 
                                     Process.Start("yt-dlp.exe", $"--remote-components ejs:github --cookies {cookiesfile} -o \"{trailerName}\" {ytURL}").WaitForExit();
+
                                     await Task.Delay(1000);
                                 }
                                 else
                                 {
-                                    Console.WriteLine($"Skipping download for existing trailer {baseName}");
+                                    Console.WriteLine($"No trailers found for {moviePath}");
                                 }
-                            } else
+                            }
+                            catch (HttpRequestException e)
                             {
-                                Console.WriteLine($"No trailers found for {moviePath}");
+                                Console.WriteLine($"TMDB request error: {e.Message}");
                             }
                         }
-                        catch (HttpRequestException e)
+                        else
                         {
-                            Console.WriteLine($"TMDB request error: {e.Message}");
+                            Console.WriteLine($"{moviePath} has no tmdbid, skipping");
                         }
-                    } else
-                    {
-                        Console.WriteLine($"{moviePath} has no tmdbid, skipping");
-                    }
 
-                    await Task.Delay(100);
+                        await Task.Delay(100);
+                    }
+                } else
+                {
+                    Console.WriteLine($"\n\nSkipping download for {moviePath}, trailers/trailer1 already exists!");
                 }
             }
         }
